@@ -1,0 +1,46 @@
+---
+title: "writeup"
+output: html_document
+---
+
+The first step is to declare our libraries and import the data.
+Note we will only be importing the training set at this time.
+
+
+```{r}
+data<-read.csv("pml-training.csv")
+```
+Note that we get a table with 160 variables. classe is our Y variable, and X is just index.
+A lot of the columns have missing data in them. Im going to get rid of any columns with NA.
+
+remColumns<-grep("NA",data[1,])
+data2<-data[,-remColumns]
+data3<-data2[,(data2[1,]!="")]
+
+Ill also get rid of any columns where the data is blank
+data3<-data2[,(data2[1,]!="")]
+
+At this point we have 60 variables, including our Y variable, and index variable.
+Im going to get rid of the index and the username variables, since those might skew our predictions.
+We dont want to have a model that says "If its carlitos, then he is not doing the exercise right"
+We want to look at the individual exercise and know if its bad or good based on the data.
+
+data4<-data3[!names(data3) %in% c("X","user_name")]
+
+Now we have 58 features, and 19622 rows where each row is an independent example.
+We will now take the data and split it into testing and training. 
+library(caret)
+set.seed(4582)
+inTrain<-createDataPartition(y=data4$classe,p=.75,list=FALSE)
+training<-data4[inTrain,]
+testing<-data4[-inTrain,]
+model1<-train(classe~.,data=training,method="rf")
+boostFit <- train(classe ~ ., method = "gbm", data = training, verbose = F, trControl = fitControl)
+
+You can also embed plots, for example:
+
+```{r, echo=FALSE}
+plot(cars)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
