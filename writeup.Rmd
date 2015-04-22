@@ -3,95 +3,205 @@ title: "writeup"
 output: html_document
 ---
 
-The first step is to declare our libraries and import the data.
-Note we will only be importing the training set at this time.
+In this writeup, I will be analyzing data with machine learning.
+I will be making predictions about a test set with the data at hand.
+The test data is from http://groupware.les.inf.puc-rio.br/har
 
+The steps are as follows
+1. Download data and remove any columns that we see will be problematic
+2. Remove any columns from preprocessing
+3. Fit 3 models (linear algebra, random forest, and boost)
+4. Test their accuracy (out of sample error) against the cross validation set
+5. Predict the 20 values from the test set
 
+#Part 1
+* First we will set our working directory to a folder with the pml-training.csv data
+* Then we will read it in. We will remove any columns with NA for most of its cells
+* We will also remove columns where most of the cells are blank
+* We will finally remove the X column and the username columns
+* The reason we remove the X column is that its just an index of the rows. It shouldnt be used
+to predict new values
+* We remove the username variable because we dont want to use that as a predictor. In other words,
+* we want to look at the data, not who generated the data. It could lead to things like "if bobby did the exercise, its probably wrong".
 ```{r}
-setwd("practicalmachinelearning/")
 data<-read.csv("pml-training.csv",header=TRUE)
 remColumns<-grep("NA",data[1,])
 data<-data[,-remColumns]
 data<-data[,(data[1,]!="")]
 data<-data[!names(data) %in% c("X","user_name")]
+```
 
-#see if linearcombos for any of the numeric data
+#Part 2 
+First we want to see if linearcombos for any of the numeric data
+```{r}
+library(caret)
 comboInfo <- findLinearCombos(data[,c(1:2,5:57)])
-#we get no linear combos
+comboInfo
+```
+We get no linear combos
 
-#lets make sure we dont have any near zero variables
+Now lets make sure we dont have any near zero variables
+```{r}
 nzv<-nearZeroVar(data)
-# we get one. we can see that .102 percent of the variables in new_window are unique
-# thats very low, so we can remove the variable with the following
-data$new_window<-NULL
+nzv
+```
+We get one. we can see that .102 percent of the variables in new_window are unique.
 
-#find correlations between all numeric variables. we will go high so set it to 99 percent
+
+Thats very low, so we can remove the variable with the following
+```{r}
+data$new_window<-NULL
+```
+
+Now we find correlations between all numeric variables.
+
+We will go high so set it to 99 percent
+```{r}
 dCor <-  cor(data[,c(1,2,4:56)])
 findCorrelation(dCor, cutoff = .99)
+```
 
-#we see its column 13, the accel_belt_y. to remove it
+we see its column 13, the accel_belt_y. to remove it
+```{r}
 data$accel_belt_y<-NULL
+```
 
-library(caret)
+#Part 3
+This step involves creating a training set and cross validation set
+```{r}
 inTrain<-createDataPartition(y=data$classe,p=.75,list=FALSE)
 training<-data[inTrain,]
-testing<-data[-inTrain,]
+cross<-data[-inTrain,]
+```
+For creating the models, we use the doMC library ad set our cores to 3.
 
-#particularly for ramdomForest, im setting it to use 3 
-#of my processors when fitting the models
+I have 4 cores on my machine, I dont want to use all of them, so ill set the cores to 3
+
+```{r}
 library(doMC)
 registerDoMC(cores = 3)
+```
 
+Now we are ready to create our models. We will set the seed to 4582 (random number i chose so
+that we can reproduce the results)
+```{r}
 set.seed(4582)
-modelLinear<-train(classe~.,data=training,method="lda",trControl=trainControl(method="cv"))
-#mtry is the number of randomly selected predictors
-modelRF<-train(classe~.,data=training,method="rf",trControl=trainControl(method="cv"),tuneGrid=expand.grid(mtry=6))
+```
 
+The first model is the linear model. 
+
+We use classe as the y variable vs all other variables
+
+Our method is lda for linear model. We use the train control with method=cv so that we dont 
+use as much cpu. 
+
+Its a resampling method, and I found this to be the best balance in terms
+of accuracy and speed. 
+
+Note we are not going to evaluate the model due to size constraints,
+so i have added eval=FALSE to the rest of the code chunks. 
+
+I will input the results manually.
+
+```{r eval=FALSE}
+modelLinear<-train(classe~.,data=training,method="lda",trControl=trainControl(method="cv"))
+```
+
+Now we need to fit a random forest model. 
+
+We do it the same way we did linear algebra, except our method is rf and we input a tune grid.
+
+Tune grid tells us how many randomly selected predictors to use during the random forest generation.
+
+In this case, I chose 6 (rather than using all predictors)
+```{r eval=FALSE}
+modelRF<-train(classe~.,data=training,method="rf",trControl=trainControl(method="cv"),tuneGrid=expand.grid(mtry=6))
 print(modelRF$finalModel)
+```
+
 
 Call:
- randomForest(x = x, y = y, mtry = param$mtry) 
-               Type of random forest: classification
-                     Number of trees: 500
+
+randomForest(x = x, y = y, mtry = param$mtry) 
+
+Type of random forest: classification
+
+Number of trees: 500
+
 No. of variables tried at each split: 6
 
         OOB estimate of  error rate: 0.12%
+
 Confusion matrix:
-     A    B    C    D    E  class.error
+
+A    B    C    D    E  class.error
+
 A 4184    1    0    0    0 0.0002389486
+
 B    3 2845    0    0    0 0.0010533708
+
 C    0    2 2562    3    0 0.0019477990
+
 D    0    0    5 2406    1 0.0024875622
+
 E    0    0    0    2 2704 0.0007390983
 
+As we can see, we have a very low error rate (this is not out of sample, this is on the model
+itself).
 
-#may need to not use nmtry but use n.trees for number of boosting iterations
+Our boost model follows the same pattern, except we use method gbm and since it outputs a lot of information, we set verbose to FALSE
+```{r eval=FALSE}
 modelBoost<-train(classe~.,data=training,method="gbm",verbose=FALSE,trControl=trainControl(method="cv"))
-
 head(summary(modelBoost),10)
-                                                          var   rel.inf
+```
+
+var   rel.inf
+
 raw_timestamp_part_1                     raw_timestamp_part_1 24.799770
+
 roll_belt                                           roll_belt 14.384293
+
 pitch_forearm                                   pitch_forearm  7.236918
+
 num_window                                         num_window  7.188353
+
 magnet_dumbbell_z                           magnet_dumbbell_z  4.826559
+
 roll_forearm                                     roll_forearm  3.567871
+
 cvtd_timestamp28/11/2011 14:15 cvtd_timestamp28/11/2011 14:15  3.202645
+
 cvtd_timestamp30/11/2011 17:12 cvtd_timestamp30/11/2011 17:12  3.101513
+
 pitch_belt                                         pitch_belt  2.493709
+
 magnet_dumbbell_y                           magnet_dumbbell_y  2.443469
 
+As we can see from the boost model, raw_timestamp_part_1 is the most important variable,
+followed by roll_belt
 
-accLinear<-sum(predict(modelLinear,testing)==testing$classe)/length(testing$classe)
-#comes out at 85.7 percent
-accRF<-sum(predict(modelRF,testing)==testing$classe)/length(testing$classe)
-#comes out at 99.90 percent accurate
-accBoost<-sum(predict(modelBoost,testing)==testing$classe)/length(testing$classe)
-#comes out at 99.67 percent accuracy. So out of sample error is .27 percent
+#Part 4
+Now we test the accuracy of each model on our cross validation data.
+```{r eval=FALSE}
+accLinear<-sum(predict(modelLinear,cross)==cross$classe)/length(cross$classe)
+accRF<-sum(predict(modelRF,cross)==cross$classe)/length(cross$classe)
+accBoost<-sum(predict(modelBoost,cross)==cross$classe)/length(cross$classe)
+```
 
+* Our linear model is 85.7 percent accurate against the cross validation data (14.3 percent OOS error)
+* Our random forest is 99.90 percent accurate against the cross validation data (.1 percent OOS error)
+* Our boost is 99.67 percent accurate (.33 percent OOS error)
+
+#Part 5
+With that in mind, we import our test data, and predict based on the random forest. Note that if we used
+the boost model, it would get the same predictions
+```{r eval=FALSE}
 testData<-read.csv("pml-testing.csv",header=TRUE)
 submit<-predict(modelRF,testData)
+```
 
+Now we create our submission files
+```{r eval=FALSE}
 pml_write_files = function(x){
   n = length(x)
   for(i in 1:n){
@@ -99,40 +209,9 @@ pml_write_files = function(x){
     write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
   }
 }
-
 pml_write_files(submit)
-
-#They were all correct
-
-```
-Note that we get a table with 160 variables. classe is our Y variable, and X is just index.
-A lot of the columns have missing data in them. Im going to get rid of any columns with NA.
-
-remColumns<-grep("NA",data[1,])
-data2<-data[,-remColumns]
-
-Ill also get rid of any columns where the data is blank
-data2<-data2[,(data2[1,]!="")]
-
-at this point it has problem with the new_window variable. ill remove it with
-
-data3<-data2
-data3$new_window<-NULL
-
-now its exactly the same as the other problem.
-
-At this point we have 60 variables, including our Y variable, and index variable.
-Im going to get rid of the index and the username variables, since those might skew our predictions.
-We dont want to have a model that says "If its carlitos, then he is not doing the exercise right"
-We want to look at the individual exercise and know if its bad or good based on the data.
-
-data4<-data3[!names(data3) %in% c("X","user_name")]
-
-Now we have 58 features, and 19622 rows where each row is an independent example.
-We will now take the data and split it into testing and training. 
-
-```{r, echo=FALSE}
-plot(cars)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+All submissions were correct
+
+

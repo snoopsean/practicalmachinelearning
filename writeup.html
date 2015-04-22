@@ -64,58 +64,139 @@ img {
 </div>
 
 
-<p>The first step is to declare our libraries and import the data. Note we will only be importing the training set at this time.</p>
-<p>setwd(“practicalmachinelearning/”) data&lt;-read.csv(“pml-training.csv”,header=TRUE) remColumns&lt;-grep(“NA”,data[1,]) data&lt;-data[,-remColumns] data&lt;-data[,(data[1,]!=“”)] data&lt;-data[!names(data) %in% c(“X”,“user_name”)]</p>
-<div id="see-if-linearcombos-for-any-of-the-numeric-data" class="section level1">
-<h1>see if linearcombos for any of the numeric data</h1>
-<p>comboInfo &lt;- findLinearCombos(data[,c(1:2,5:57)]) #we get no linear combos</p>
+<p>In this writeup, I will be analyzing data with machine learning. I will be making predictions about a test set with the data at hand. The test data is from <a href="http://groupware.les.inf.puc-rio.br/har" class="uri">http://groupware.les.inf.puc-rio.br/har</a></p>
+<p>The steps are as follows 1. Download data and remove any columns that we see will be problematic 2. Remove any columns from preprocessing 3. Fit 3 models (linear algebra, random forest, and boost) 4. Test their accuracy (out of sample error) against the cross validation set 5. Predict the 20 values from the test set</p>
+<div id="part-1" class="section level1">
+<h1>Part 1</h1>
+<ul>
+<li>First we will set our working directory to a folder with the pml-training.csv data</li>
+<li>Then we will read it in. We will remove any columns with NA for most of its cells</li>
+<li>We will also remove columns where most of the cells are blank</li>
+<li>We will finally remove the X column and the username columns</li>
+<li>The reason we remove the X column is that its just an index of the rows. It shouldnt be used to predict new values</li>
+<li>We remove the username variable because we dont want to use that as a predictor. In other words,</li>
+<li>we want to look at the data, not who generated the data. It could lead to things like “if bobby did the exercise, its probably wrong”.</li>
+</ul>
+<pre class="r"><code>data&lt;-read.csv(&quot;pml-training.csv&quot;,header=TRUE)
+remColumns&lt;-grep(&quot;NA&quot;,data[1,])
+data&lt;-data[,-remColumns]
+data&lt;-data[,(data[1,]!=&quot;&quot;)]
+data&lt;-data[!names(data) %in% c(&quot;X&quot;,&quot;user_name&quot;)]</code></pre>
 </div>
-<div id="lets-make-sure-we-dont-have-any-near-zero-variables" class="section level1">
-<h1>lets make sure we dont have any near zero variables</h1>
-<p>nzv&lt;-nearZeroVar(data) # we get one. we can see that .102 percent of the variables in new_window are unique # thats very low, so we can remove the variable with the following data$new_window&lt;-NULL</p>
+<div id="part-2" class="section level1">
+<h1>Part 2</h1>
+<p>First we want to see if linearcombos for any of the numeric data</p>
+<pre class="r"><code>library(caret)</code></pre>
+<pre><code>## Loading required package: lattice
+## Loading required package: ggplot2</code></pre>
+<pre class="r"><code>comboInfo &lt;- findLinearCombos(data[,c(1:2,5:57)])
+comboInfo</code></pre>
+<pre><code>## $linearCombos
+## list()
+## 
+## $remove
+## NULL</code></pre>
+<p>We get no linear combos</p>
+<p>Now lets make sure we dont have any near zero variables</p>
+<pre class="r"><code>nzv&lt;-nearZeroVar(data)
+nzv</code></pre>
+<pre><code>## [1] 4</code></pre>
+<p>We get one. we can see that .102 percent of the variables in new_window are unique.</p>
+<p>Thats very low, so we can remove the variable with the following</p>
+<pre class="r"><code>data$new_window&lt;-NULL</code></pre>
+<p>Now we find correlations between all numeric variables.</p>
+<p>We will go high so set it to 99 percent</p>
+<pre class="r"><code>dCor &lt;-  cor(data[,c(1,2,4:56)])
+findCorrelation(dCor, cutoff = .99)</code></pre>
+<pre><code>## [1] 13</code></pre>
+<p>we see its column 13, the accel_belt_y. to remove it</p>
+<pre class="r"><code>data$accel_belt_y&lt;-NULL</code></pre>
 </div>
-<div id="find-correlations-between-all-numeric-variables.-we-will-go-high-so-set-it-to-99-percent" class="section level1">
-<h1>find correlations between all numeric variables. we will go high so set it to 99 percent</h1>
-<p>dCor &lt;- cor(data[,c(1,2,4:56)]) findCorrelation(dCor, cutoff = .99)</p>
-</div>
-<div id="we-see-its-column-13-the-accel_belt_y.-to-remove-it" class="section level1">
-<h1>we see its column 13, the accel_belt_y. to remove it</h1>
-<p>data$accel_belt_y&lt;-NULL</p>
-<p>library(caret) inTrain&lt;-createDataPartition(y=data$classe,p=.75,list=FALSE) training&lt;-data[inTrain,] testing&lt;-data[-inTrain,]</p>
-</div>
-<div id="particularly-for-ramdomforest-im-setting-it-to-use-3" class="section level1">
-<h1>particularly for ramdomForest, im setting it to use 3</h1>
-</div>
-<div id="of-my-processors-when-fitting-the-models" class="section level1">
-<h1>of my processors when fitting the models</h1>
-<p>library(doMC) registerDoMC(cores = 3)</p>
-<p>set.seed(4582) modelLinear&lt;-train(classe~.,data=training,method=“lda”,trControl=trainControl(method=“cv”)) #mtry is the number of randomly selected predictors modelRF&lt;-train(classe~.,data=training,method=“rf”,trControl=trainControl(method=“cv”),tuneGrid=expand.grid(mtry=6))</p>
-<p>print(modelRF$finalModel)</p>
-<p>Call: randomForest(x = x, y = y, mtry = param$mtry) Type of random forest: classification Number of trees: 500 No. of variables tried at each split: 6</p>
+<div id="part-3" class="section level1">
+<h1>Part 3</h1>
+<p>This step involves creating a training set and cross validation set</p>
+<pre class="r"><code>inTrain&lt;-createDataPartition(y=data$classe,p=.75,list=FALSE)
+training&lt;-data[inTrain,]
+cross&lt;-data[-inTrain,]</code></pre>
+<p>For creating the models, we use the doMC library ad set our cores to 3.</p>
+<p>I have 4 cores on my machine, I dont want to use all of them, so ill set the cores to 3</p>
+<pre class="r"><code>library(doMC)</code></pre>
+<pre><code>## Loading required package: foreach
+## Loading required package: iterators
+## Loading required package: parallel</code></pre>
+<pre class="r"><code>registerDoMC(cores = 3)</code></pre>
+<p>Now we are ready to create our models. We will set the seed to 4582 (random number i chose so that we can reproduce the results)</p>
+<pre class="r"><code>set.seed(4582)</code></pre>
+<p>The first model is the linear model.</p>
+<p>We use classe as the y variable vs all other variables</p>
+<p>Our method is lda for linear model. We use the train control with method=cv so that we dont use as much cpu.</p>
+<p>Its a resampling method, and I found this to be the best balance in terms of accuracy and speed.</p>
+<p>Note we are not going to evaluate the model due to size constraints, so i have added eval=FALSE to the rest of the code chunks.</p>
+<p>I will input the results manually.</p>
+<pre class="r"><code>modelLinear&lt;-train(classe~.,data=training,method=&quot;lda&quot;,trControl=trainControl(method=&quot;cv&quot;))</code></pre>
+<p>Now we need to fit a random forest model.</p>
+<p>We do it the same way we did linear algebra, except our method is rf and we input a tune grid.</p>
+<p>Tune grid tells us how many randomly selected predictors to use during the random forest generation.</p>
+<p>In this case, I chose 6 (rather than using all predictors)</p>
+<pre class="r"><code>modelRF&lt;-train(classe~.,data=training,method=&quot;rf&quot;,trControl=trainControl(method=&quot;cv&quot;),tuneGrid=expand.grid(mtry=6))
+print(modelRF$finalModel)</code></pre>
+<p>Call:</p>
+<p>randomForest(x = x, y = y, mtry = param$mtry)</p>
+<p>Type of random forest: classification</p>
+<p>Number of trees: 500</p>
+<p>No. of variables tried at each split: 6</p>
 <pre><code>    OOB estimate of  error rate: 0.12%</code></pre>
-<p>Confusion matrix: A B C D E class.error A 4184 1 0 0 0 0.0002389486 B 3 2845 0 0 0 0.0010533708 C 0 2 2562 3 0 0.0019477990 D 0 0 5 2406 1 0.0024875622 E 0 0 0 2 2704 0.0007390983</p>
+<p>Confusion matrix:</p>
+<p>A B C D E class.error</p>
+<p>A 4184 1 0 0 0 0.0002389486</p>
+<p>B 3 2845 0 0 0 0.0010533708</p>
+<p>C 0 2 2562 3 0 0.0019477990</p>
+<p>D 0 0 5 2406 1 0.0024875622</p>
+<p>E 0 0 0 2 2704 0.0007390983</p>
+<p>As we can see, we have a very low error rate (this is not out of sample, this is on the model itself).</p>
+<p>Our boost model follows the same pattern, except we use method gbm and since it outputs a lot of information, we set verbose to FALSE</p>
+<pre class="r"><code>modelBoost&lt;-train(classe~.,data=training,method=&quot;gbm&quot;,verbose=FALSE,trControl=trainControl(method=&quot;cv&quot;))
+head(summary(modelBoost),10)</code></pre>
+<p>var rel.inf</p>
+<p>raw_timestamp_part_1 raw_timestamp_part_1 24.799770</p>
+<p>roll_belt roll_belt 14.384293</p>
+<p>pitch_forearm pitch_forearm 7.236918</p>
+<p>num_window num_window 7.188353</p>
+<p>magnet_dumbbell_z magnet_dumbbell_z 4.826559</p>
+<p>roll_forearm roll_forearm 3.567871</p>
+<p>cvtd_timestamp28/11/2011 14:15 cvtd_timestamp28/11/2011 14:15 3.202645</p>
+<p>cvtd_timestamp30/11/2011 17:12 cvtd_timestamp30/11/2011 17:12 3.101513</p>
+<p>pitch_belt pitch_belt 2.493709</p>
+<p>magnet_dumbbell_y magnet_dumbbell_y 2.443469</p>
+<p>As we can see from the boost model, raw_timestamp_part_1 is the most important variable, followed by roll_belt</p>
 </div>
-<div id="may-need-to-not-use-nmtry-but-use-n.trees-for-number-of-boosting-iterations" class="section level1">
-<h1>may need to not use nmtry but use n.trees for number of boosting iterations</h1>
-<p>modelBoost&lt;-train(classe~.,data=training,method=“gbm”,verbose=FALSE,trControl=trainControl(method=“cv”))</p>
-<p>head(summary(modelBoost),10) var rel.inf raw_timestamp_part_1 raw_timestamp_part_1 24.799770 roll_belt roll_belt 14.384293 pitch_forearm pitch_forearm 7.236918 num_window num_window 7.188353 magnet_dumbbell_z magnet_dumbbell_z 4.826559 roll_forearm roll_forearm 3.567871 cvtd_timestamp28/11/2011 14:15 cvtd_timestamp28/11/2011 14:15 3.202645 cvtd_timestamp30/11/2011 17:12 cvtd_timestamp30/11/2011 17:12 3.101513 pitch_belt pitch_belt 2.493709 magnet_dumbbell_y magnet_dumbbell_y 2.443469</p>
-<p>accLinear&lt;-sum(predict(modelLinear,testing)==testing<span class="math">\(classe)/length(testing\)</span>classe) #comes out at 85.7 percent accRF&lt;-sum(predict(modelRF,testing)==testing<span class="math">\(classe)/length(testing\)</span>classe) #comes out at 99.90 percent accurate accBoost&lt;-sum(predict(modelBoost,testing)==testing<span class="math">\(classe)/length(testing\)</span>classe) #comes out at 99.67 percent accuracy. So out of sample error is .27 percent</p>
-<p>testData&lt;-read.csv(“pml-testing.csv”,header=TRUE) submit&lt;-predict(modelRF,testData)</p>
-<p>pml_write_files = function(x){ n = length(x) for(i in 1:n){ filename = paste0(“problem_id_”,i,“.txt”) write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE) } }</p>
-<p>pml_write_files(submit)</p>
+<div id="part-4" class="section level1">
+<h1>Part 4</h1>
+<p>Now we test the accuracy of each model on our cross validation data.</p>
+<pre class="r"><code>accLinear&lt;-sum(predict(modelLinear,cross)==cross$classe)/length(cross$classe)
+accRF&lt;-sum(predict(modelRF,cross)==cross$classe)/length(cross$classe)
+accBoost&lt;-sum(predict(modelBoost,cross)==cross$classe)/length(cross$classe)</code></pre>
+<ul>
+<li>Our linear model is 85.7 percent accurate against the cross validation data (14.3 percent OOS error)</li>
+<li>Our random forest is 99.90 percent accurate against the cross validation data (.1 percent OOS error)</li>
+<li>Our boost is 99.67 percent accurate (.33 percent OOS error)</li>
+</ul>
 </div>
-<div id="they-were-all-correct" class="section level1">
-<h1>They were all correct</h1>
-<p>``` Note that we get a table with 160 variables. classe is our Y variable, and X is just index. A lot of the columns have missing data in them. Im going to get rid of any columns with NA.</p>
-<p>remColumns&lt;-grep(“NA”,data[1,]) data2&lt;-data[,-remColumns]</p>
-<p>Ill also get rid of any columns where the data is blank data2&lt;-data2[,(data2[1,]!=“”)]</p>
-<p>at this point it has problem with the new_window variable. ill remove it with</p>
-<p>data3&lt;-data2 data3$new_window&lt;-NULL</p>
-<p>now its exactly the same as the other problem.</p>
-<p>At this point we have 60 variables, including our Y variable, and index variable. Im going to get rid of the index and the username variables, since those might skew our predictions. We dont want to have a model that says “If its carlitos, then he is not doing the exercise right” We want to look at the individual exercise and know if its bad or good based on the data.</p>
-<p>data4&lt;-data3[!names(data3) %in% c(“X”,“user_name”)]</p>
-<p>Now we have 58 features, and 19622 rows where each row is an independent example. We will now take the data and split it into testing and training.</p>
-<p>Note that the <code>echo = FALSE</code> parameter was added to the code chunk to prevent printing of the R code that generated the plot.</p>
+<div id="part-5" class="section level1">
+<h1>Part 5</h1>
+<p>With that in mind, we import our test data, and predict based on the random forest. Note that if we used the boost model, it would get the same predictions</p>
+<pre class="r"><code>testData&lt;-read.csv(&quot;pml-testing.csv&quot;,header=TRUE)
+submit&lt;-predict(modelRF,testData)</code></pre>
+<p>Now we create our submission files</p>
+<pre class="r"><code>pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0(&quot;problem_id_&quot;,i,&quot;.txt&quot;)
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(submit)</code></pre>
+<p>All submissions were correct</p>
 </div>
 
 
