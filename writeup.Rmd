@@ -1,18 +1,20 @@
 ---
-title: "writeup"
+title: "Fitness data: checking if they did the exercises correctly"
 output: html_document
 ---
 
-In this writeup, I will be analyzing data with machine learning.
+In this writeup, I will be analyzing fitness data with machine learning.
+
 I will be making predictions about a test set with the data at hand.
+
 The test data is from http://groupware.les.inf.puc-rio.br/har
 
 The steps are as follows
-1. Download data and remove any columns that we see will be problematic
-2. Remove any columns from preprocessing
-3. Fit 3 models (linear algebra, random forest, and boost)
-4. Test their accuracy (out of sample error) against the cross validation set
-5. Predict the 20 values from the test set
+* Download data and remove any columns that we see will be problematic
+* Remove any columns from preprocessing
+* Fit 3 models (linear algebra, random forest, and boost)
+* Test their accuracy (out of sample error) against the cross validation set
+* Predict the 20 values from the test set
 
 #Part 1
 * First we will set our working directory to a folder with the pml-training.csv data
@@ -22,7 +24,8 @@ The steps are as follows
 * The reason we remove the X column is that its just an index of the rows. It shouldnt be used
 to predict new values
 * We remove the username variable because we dont want to use that as a predictor. In other words,
-* we want to look at the data, not who generated the data. It could lead to things like "if bobby did the exercise, its probably wrong".
+* We want to look at the data, not who generated the data. It could lead to things like "if bobby did the exercise, its probably wrong".
+
 ```{r}
 data<-read.csv("pml-training.csv",header=TRUE)
 remColumns<-grep("NA",data[1,])
@@ -32,7 +35,7 @@ data<-data[!names(data) %in% c("X","user_name")]
 ```
 
 #Part 2 
-First we want to see if linearcombos for any of the numeric data
+First we want to see if linear combos for any of the numeric data
 ```{r}
 library(caret)
 comboInfo <- findLinearCombos(data[,c(1:2,5:57)])
