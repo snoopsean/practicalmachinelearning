@@ -9,7 +9,7 @@ I will be making predictions about a test set with the data at hand.
 
 The test data is from http://groupware.les.inf.puc-rio.br/har
 
-The steps are as follows
+##The steps are as follows
 * Download data and remove any columns that we see will be problematic
 * Remove any columns from preprocessing
 * Fit 3 models (linear algebra, random forest, and boost)
